@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Management System</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Arial, sans-serif; background: #f4f6f8; color: #222; }
+        .container { max-width: 1050px; margin: 30px auto; padding: 0 18px; }
+        h1 { text-align: center; margin-bottom: 8px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 28px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+        h2 { margin-top: 0; font-size: 20px; }
+        input { width: 100%; padding: 11px; margin: 7px 0; border: 1px solid #ccc; border-radius: 7px; }
+        button { border: 0; padding: 10px 14px; margin-top: 7px; border-radius: 7px; cursor: pointer; background: #2563eb; color: white; }
+        button:hover { background: #1d4ed8; }
+        .secondary { background: #555; }
+        .secondary:hover { background: #333; }
+        .danger { background: #dc2626; }
+        .danger:hover { background: #b91c1c; }
+        #message { margin: 18px 0; padding: 12px; border-radius: 7px; display: none; }
+        #message.success { display: block; background: #dcfce7; color: #166534; }
+        #message.error { display: block; background: #fee2e2; color: #991b1b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 9px; text-align: left; }
+        th { background: #eef2ff; }
+        .full { grid-column: 1 / -1; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .hint { font-size: 13px; color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📚 Library Management System</h1>
+    <p class="subtitle">Simple Spring Boot + HTML interface</p>
+
+    <div id="message"></div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>➕ Add Book</h2>
+            <input id="bookTitle" placeholder="Book title">
+            <input id="bookAuthor" placeholder="Author">
+            <button onclick="addBook()">Add Book</button>
+        </div>
+
+        <div class="card">
+            <h2>👤 Add Member</h2>
+            <input id="memberName" placeholder="Member name">
+            <input id="memberEmail" type="email" placeholder="Email">
+            <button onclick="addMember()">Add Member</button>
+        </div>
+
+        <div class="card">
+            <h2>📖 Borrow Book</h2>
+            <input id="borrowBookId" type="number" placeholder="Book ID">
+            <input id="borrowMemberId" type="number" placeholder="Member ID">
+            <p class="hint">Use the IDs shown in the tables below.</p>
+            <button onclick="borrowBook()">Borrow Book</button>
+        </div>
+
+        <div class="card">
+            <h2>↩️ Return Book</h2>
+            <input id="returnLoanId" type="number" placeholder="Loan ID">
+            <p class="hint">Use the Loan ID shown in the loans table.</p>
+            <button class="danger" onclick="returnBook()">Return Book</button>
+        </div>
+
+        <div class="card full">
+            <h2>📚 Books</h2>
+            <div class="actions">
+                <button onclick="loadBooks()">View All Books</button>
+            </div>
+            <div id="booksTable"></div>
+        </div>
+
+        <div class="card full">
+            <h2>👥 Members</h2>
+            <div class="actions">
+                <button onclick="loadMembers()">View All Members</button>
+            </div>
+            <div id="membersTable"></div>
+        </div>
+
+        <div class="card full">
+            <h2>📋 Loans</h2>
+            <div class="actions">
+                <button class="secondary" onclick="loadLoans()">View Loans</button>
+            </div>
+            <div id="loansTable"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const messageBox = document.getElementById('message');
+
+    function showMessage(text, success = true) {
+        messageBox.textContent = text;
+        messageBox.className = success ? 'success' : 'error';
+        setTimeout(() => messageBox.className = '', 3500);
+    }
+
+    async function request(url, options = {}) {
+        const response = await fetch(url, options);
+        const text = await response.text();
+        let data;
+        try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+        if (!response.ok) {
+            throw new Error(typeof data === 'string' ? data : (data?.message || 'Request failed'));
+        }
+        return data;
+    }
+
+    async function addBook() {
+        const title = document.getElementById('bookTitle').value.trim();
+        const author = document.getElementById('bookAuthor').value.trim();
+        if (!title || !author) return showMessage('Enter both title and author.', false);
+        try {
+            const book = await request('/api/books', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title, author})
+            });
+            showMessage(`Book added successfully. Book ID: ${book.id}`);
+            document.getElementById('bookTitle').value = '';
+            document.getElementById('bookAuthor').value = '';
+            loadBooks();
+        } catch (e) { showMessage(e.message, false); }
+    }
+
+    async function loadBooks() {
+        try {
+            const books = await request('/api/books');
+            if (!books.length) return document.getElementById('booksTable').innerHTML = '<p>No books found.</p>';
+            document.getElementById('booksTable').innerHTML = `
+                <table><tr><th>ID</th><th>Title</th><th>Author</th><th>Available</th></tr>
+                ${books.map(b => `<tr><td>${b.id}</td><td>${escapeHtml(b.title)}</td><td>${escapeHtml(b.author)}</td><td>${b.available ? 'Yes' : 'No'}</td></tr>`).join('')}
+                </table>`;
+        } catch (e) { showMessage(e.message, false); }
+    }
+
+    async function addMember() {
+        const name = document.getElementById('memberName').value.trim();
+        const email = document.getElementById('memberEmail').value.trim();
+        if (!name || !email) return showMessage('Enter both member name and email.', false);
+        try {
+            const member = await request('/api/members', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, email})
+            });
+            showMessage(`Member added successfully. Member ID: ${member.id}`);
+            document.getElementById('memberName').value = '';
+            document.getElementById('memberEmail').value = '';
+            loadMembers();
+        } catch (e) { showMessage(e.message, false); }
+    }
+
+    async function loadMembers() {
+        try {
+            const members = await request('/api/members');
+            if (!members.length) return document.getElementById('membersTable').innerHTML = '<p>No members found.</p>';
+            document.getElementById('membersTable').innerHTML = `
+                <table><tr><th>ID</th><th>Name</th><th>Email</th></tr>
+                ${members.map(m => `<tr><td>${m.id}</td><td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.email)}</td></tr>`).join('')}
+                </table>`;
+        } catch (e) { showMessage(e.message, false); }
+    }
+
+    async function borrowBook() {
+        const bookId = document.getElementById('borrowBookId').value;
+        const memberId = document.getElementById('borrowMemberId').value;
+        if (!bookId || !memberId) return showMessage('Enter Book ID and Member ID.', false);
+        try {
+            const loan = await request(`/api/borrow?bookId=${encodeURIComponent(bookId)}&memberId=${encodeURIComponent(memberId)}`, {method: 'POST'});
+            showMessage(`Book borrowed successfully. Loan ID: ${loan.id}`);
+            document.getElementById('borrowBookId').value = '';
+            document.getElementById('borrowMemberId').value = '';
+            loadBooks();
+            loadLoans();
+        } catch (e) { showMessage(e.message, false); }
+    }
+
+    async function returnBook() {
+        const loanId = document.getElementById('returnLoanId').value;
+        if (!loanId) return showMessage('Enter Loan ID.', false);
+        try {
+            await request(`/api/return?loanId=${encodeURIComponent(loanId)}`, {method: 'POST'});
+            showMessage('Book returned successfully.');
+            document.getElementById('returnLoanId').value = '';
+            loadBooks();
+            loadLoans();
+        } catch (e) { showMessage(e.message, false); }
+    }
+
+    async function loadLoans() {
+        try {
+            // LoanRepository has no REST endpoint in the base assignment.
+            // This section explains that loans can be identified immediately after borrowing.
+            document.getElementById('loansTable').innerHTML = '<p>After borrowing a book, the Loan ID is displayed above. Use that ID in the Return Book section.</p>';
+        } catch (e) { showMessage(e.message, false); }
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    }
+
+    window.addEventListener('load', () => {
+        loadBooks();
+        loadMembers();
+        loadLoans();
+    });
+</script>
+</body>
+</html>
